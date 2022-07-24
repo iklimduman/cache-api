@@ -6,14 +6,7 @@ const generateRandomStringValue = (length) => {
         randomString += characters.charAt(Math.floor(Math.random() * characters.length));
     }
 
-    console.log(randomString) ;
-
     return randomString;
 }
 
-const generateRandomKey = () => {
-
-}
-
-module.exports.generateRandomKey = generateRandomKey ;
 module.exports.generateRandomStringValue = generateRandomStringValue ;
