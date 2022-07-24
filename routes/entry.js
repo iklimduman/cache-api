@@ -69,6 +69,25 @@ router.get("/find/:key", async (req, res) => {
 // Update an entry
 
 // Get all keys
+router.get("/getAllKeys", async(req,res) => {
+    try{
+        const Entries = await Entry.find({}) ;
+        var keyArr = [] ;
+        Object.values(Entries).forEach(element => {
+            keyArr.push(element.key)
+        });
+        console.log(keyArr) ;
+        res.status(200).json({
+            message : "Query returned successfully",
+            "Keys stored in the db" : keyArr
+        })
+    }
+    catch(err){
+        res.status(500).json({
+            message : err
+        })
+    }
+})
 
 // Delete an entry
 router.delete("/deleteEntry/:key", async (req, res) => {
