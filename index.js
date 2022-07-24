@@ -4,7 +4,11 @@ const mongoose = require("mongoose");
 const Entry = require("./models/Entry");
 const entryRoute = require("./routes/entry");
 
-mongoose.connect("mongodb+srv://test_user:testuser@cluster0.u9bnl.mongodb.net/fashionCloud?retryWrites=true&w=majority")
+const username = "YOUR USERNAME" ;
+const password = "YOUR PASSWORD" ;
+const dbName = "YOUR DB NAME" ;
+
+mongoose.connect(`mongodb+srv://${username}:${password}@cluster0.u9bnl.mongodb.net/${dbName}?retryWrites=true&w=majority`)
     .then(async () => {
         console.log("db connection is successfull");
         const recordCount = await Entry.count({});
