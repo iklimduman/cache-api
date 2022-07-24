@@ -135,5 +135,18 @@ router.delete("/deleteEntry/:key", async (req, res) => {
 })
 
 // Delete all entries
+router.delete("/deleteAll", async(req,res) => {
+    try{
+        await Entry.deleteMany() ;
+        res.status(200).json({
+            message : "All data successfully deleted"
+        })
+    }
+    catch(err){
+        res.status(500).json({
+            message: err
+        })
+    }
+})
 
 module.exports = router;
