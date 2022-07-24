@@ -13,6 +13,14 @@ async function checkIfEntryLimitReached() {
     return entryCount >= ENTRY_LIMIT ? 1 : 0;
 }
 
+// Check if TTL exceed, if exceed return true
+async function checkIfTTLLimitExceed(TTL_Limit, lastActionAt) {
+    const now_unixMs = Math.floor(new Date().getTime() / 1000);
+    const lastActionAt_unixMs = Math.floor(new Date(lastActionAt).getTime() / 1000);
+    var difference = (now_unixMs - lastActionAt_unixMs) ;
+    return difference >= TTL_Limit ? 1 : 0;
+}
+
 // update last action date every get request and cache hit
 router.put("/updateLastActionDate/:key", async (req, res) => {
     try {
@@ -69,7 +77,13 @@ router.get("/find/:key", async (req, res) => {
             key: req.params.key
         })
         if (entryToFind) {
-            await axios.put(`${BACKEND_URL}/updateLastActionDate/${req.params.key}`);
+            // Chcek if TTL exceed
+            const lastActionDate = await axios.get(`${BACKEND_URL}/getLastActionDate/${req.params.key}`) ;
+            const isTTLExceed = await checkIfTTLLimitExceed(TTL,lastActionDate.data.lastActionAt) ;
+            // if TTL exceed change value to another random generated string and update lastActionAt attribute
+            if(isTTLExceed) {
+                await axios.put(`${BACKEND_URL}/updateEntry/${req.params.key}`)
+            }
             res.status(200).json({
                 message: "Cache hit",
                 entry: entryToFind
@@ -111,7 +125,8 @@ router.put("/updateEntry/:key", async (req, res) => {
             const updatedEntry = await Entry.findByIdAndUpdate(entryToUpdate, {
 
                 key: req.params.key,
-                value: generateRandom.generateRandomStringValue(5)
+                value: generateRandom.generateRandomStringValue(5),
+                lastActionAt : Date.now(),
 
             })
             res.status(200).json({
@@ -132,19 +147,41 @@ router.put("/updateEntry/:key", async (req, res) => {
     }
 })
 
+// Get lastActionAt attribute by its key
+router.get("/getLastActionDate/:key", async (req, res) => {
+    try {
+        const selectedEntry = await Entry.find({ key : req.params.key}) ;
+        res.status(200).json({
+            message : "Query returned successfully",
+            lastActionAt : Object.values(selectedEntry)[0].lastActionAt 
+        })
+    }
+    catch (err) {
+        res.status(500).json({
+            message: err
+        })
+    }
+})
+
 // Get all keys, update all records last action date
 router.get("/getAllKeys", async (req, res) => {
     try {
         const Entries = await Entry.find({});
-        await axios.put(`${BACKEND_URL}/updateLastActionDate/${Object.values(Entries)[0].key}`)
         var keyArr = [];
         Object.values(Entries).forEach(element => {
-            keyArr.push(element.key) ;
+            keyArr.push(element.key);
         });
-        for(let i=0 ; i<keyArr.length ; i++){
-            await axios.put(`${BACKEND_URL}/updateLastActionDate/${keyArr[i]}`)
+        for (let i = 0; i < keyArr.length; i++) {
+            // chcek if TTL exceed
+            const lastActionDate = await axios.get(`${BACKEND_URL}/getLastActionDate/${keyArr[i]}`) ;
+            const isTTLExceed = await checkIfTTLLimitExceed(TTL,lastActionDate.data.lastActionAt) ;
+            // if TTL exceed change value to another random generated string and update lastActionAt attribute
+            if(isTTLExceed) {
+                await axios.put(`${BACKEND_URL}/updateEntry/${keyArr[i]}`)
+            }
+
         }
-        
+
         res.status(200).json({
             message: "Query returned successfully",
             "Keys stored in the db": keyArr
