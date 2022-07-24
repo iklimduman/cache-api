@@ -9,8 +9,7 @@ const TTL = 3600; // 1 hour
 
 async function checkIfEntryLimitReached() {
     const entryCount = await Entry.count({});
-    console.log(entryCount) ;
-    return entryCount >= ENTRY_LIMIT ? 0 : 1;
+    return entryCount >= ENTRY_LIMIT ? 1 : 0;
 }
 
 // Create a new entry
@@ -24,15 +23,16 @@ router.post("/createEntry/:key/:value", async (req, res) => {
     })
 
     try {
-        const checkEntryLimit = await checkIfEntryLimitReached();
-        if (checkEntryLimit) {
-            const savedEntry = await newEntry.save();
-            res.status(200).json({
-                message: "Entry saved successully",
-                entry: savedEntry
-            })
-        }
+        const isEntryLimitReached = await checkIfEntryLimitReached();
 
+        if (isEntryLimitReached) {
+            await axios.delete(`${BACKEND_URL}/deleteOldest`);
+        }
+        const savedEntry = await newEntry.save();
+        res.status(200).json({
+            message: "Entry saved successully",
+            entry: savedEntry
+        })
     }
     catch (err) {
         res.status(500).json({
@@ -54,21 +54,24 @@ router.get("/find/:key", async (req, res) => {
             })
         }
         else {
-            const checkEntryLimit = await checkIfEntryLimitReached();
-            if (checkEntryLimit) {
-                const randomGeneratedString = generateRandom.generateRandomStringValue(5);
-                const createdNewEntry = await axios.post(`${BACKEND_URL}/createEntry/${req.params.key}/${randomGeneratedString}`);
-                res.status(200).json({
-                    message: "Cache miss",
-                    entry: {
-                        message: "Random data is generated and saved into database succesfully",
-                        data: {
-                            key: createdNewEntry.data.entry.key,
-                            value: createdNewEntry.data.entry.value
-                        }
-                    }
-                })
+            const isEntryLimitReached = await checkIfEntryLimitReached();
+            console.log(isEntryLimitReached) ;
+            if (isEntryLimitReached) {
+                await axios.delete(`${BACKEND_URL}/deleteOldest`);
             }
+            const randomGeneratedString = generateRandom.generateRandomStringValue(5);
+            const createdNewEntry = await axios.post(`${BACKEND_URL}/createEntry/${req.params.key}/${randomGeneratedString}`);
+            res.status(200).json({
+                message: "Cache miss",
+                entry: {
+                    message: "Random data is generated and saved into database succesfully",
+                    data: {
+                        key: createdNewEntry.data.entry.key,
+                        value: createdNewEntry.data.entry.value
+                    }
+                }
+            })
+
         }
     }
     catch (err) {
@@ -148,7 +151,19 @@ router.delete("/deleteEntry/:key", async (req, res) => {
 
 // Delete oldest record in database
 router.delete("/deleteOldest", async (req, res) => {
-
+    try {
+        const oldestRecord = await Entry.find().sort({ updatedAt: -1 }).limit(1);
+        await axios.delete(`${BACKEND_URL}/deleteEntry/${Object.values(oldestRecord)[0].key}`);
+        console.log("oldest data removed") ;
+        res.status(200).json({
+            message: "Oldest record removed from database"
+        })
+    }
+    catch (err) {
+        res.status(500).json({
+            message: err
+        })
+    }
 })
 
 // Delete all entries
