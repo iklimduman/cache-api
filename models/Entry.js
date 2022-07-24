@@ -11,7 +11,11 @@ const EntrySchema = new mongoose.Schema(
             type : String,
             required : true,
             unique : true
-        }
+        },
+        lastActionAt : {
+            type : Date,
+            default : Date.now()
+        },
     },
     {
         timestamps : true

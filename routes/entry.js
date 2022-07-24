@@ -7,10 +7,30 @@ const BACKEND_URL = "http://localhost:5000/api/entry";
 const ENTRY_LIMIT = 10;
 const TTL = 3600; // 1 hour
 
+// Check if Entry Limit exceed, if exceed return true
 async function checkIfEntryLimitReached() {
     const entryCount = await Entry.count({});
     return entryCount >= ENTRY_LIMIT ? 1 : 0;
 }
+
+// update last action date every get request and cache hit
+router.put("/updateLastActionDate/:key", async (req, res) => {
+    try {
+        const entryToUpdate = await Entry.findOne({ key: req.params.key });
+        const updatedEntry = await Entry.findByIdAndUpdate(entryToUpdate, {
+            lastActionAt: Date.now()
+        })
+        res.status(200).json({
+            message: "Last action time updated for " + req.params.key,
+            entry: updatedEntry
+        })
+    }
+    catch (err) {
+        res.status(500).json({
+            message: err
+        })
+    }
+})
 
 // Create a new entry
 router.post("/createEntry/:key/:value", async (req, res) => {
@@ -19,7 +39,8 @@ router.post("/createEntry/:key/:value", async (req, res) => {
 
     const newEntry = new Entry({
         "key": key,
-        "value": value
+        "value": value,
+        "lastActionAt": Date.now(),
     })
 
     try {
@@ -48,6 +69,7 @@ router.get("/find/:key", async (req, res) => {
             key: req.params.key
         })
         if (entryToFind) {
+            await axios.put(`${BACKEND_URL}/updateLastActionDate/${req.params.key}`);
             res.status(200).json({
                 message: "Cache hit",
                 entry: entryToFind
@@ -55,7 +77,7 @@ router.get("/find/:key", async (req, res) => {
         }
         else {
             const isEntryLimitReached = await checkIfEntryLimitReached();
-            console.log(isEntryLimitReached) ;
+
             if (isEntryLimitReached) {
                 await axios.delete(`${BACKEND_URL}/deleteOldest`);
             }
@@ -110,15 +132,19 @@ router.put("/updateEntry/:key", async (req, res) => {
     }
 })
 
-// Get all keys
+// Get all keys, update all records last action date
 router.get("/getAllKeys", async (req, res) => {
     try {
         const Entries = await Entry.find({});
+        await axios.put(`${BACKEND_URL}/updateLastActionDate/${Object.values(Entries)[0].key}`)
         var keyArr = [];
         Object.values(Entries).forEach(element => {
-            keyArr.push(element.key)
+            keyArr.push(element.key) ;
         });
-        console.log(keyArr);
+        for(let i=0 ; i<keyArr.length ; i++){
+            await axios.put(`${BACKEND_URL}/updateLastActionDate/${keyArr[i]}`)
+        }
+        
         res.status(200).json({
             message: "Query returned successfully",
             "Keys stored in the db": keyArr
@@ -154,7 +180,7 @@ router.delete("/deleteOldest", async (req, res) => {
     try {
         const oldestRecord = await Entry.find().sort({ updatedAt: -1 }).limit(1);
         await axios.delete(`${BACKEND_URL}/deleteEntry/${Object.values(oldestRecord)[0].key}`);
-        console.log("oldest data removed") ;
+        console.log("oldest data removed");
         res.status(200).json({
             message: "Oldest record removed from database"
         })
