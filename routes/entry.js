@@ -3,14 +3,20 @@ const Entry = require("../models/Entry");
 const generateRandom = require("../generateRandomData");
 const axios = require('axios');
 
-const BACKEND_URL = "http://localhost:5000/api/entry"
+const BACKEND_URL = "http://localhost:5000/api/entry";
+const ENTRY_LIMIT = 10;
+const TTL = 3600; // 1 hour
+
+async function checkIfEntryLimitReached() {
+    const entryCount = await Entry.count({});
+    console.log(entryCount) ;
+    return entryCount >= ENTRY_LIMIT ? 0 : 1;
+}
 
 // Create a new entry
 router.post("/createEntry/:key/:value", async (req, res) => {
     const key = req.params.key;
     const value = req.params.value;
-
-    console.log(key + " " + value);
 
     const newEntry = new Entry({
         "key": key,
@@ -18,11 +24,15 @@ router.post("/createEntry/:key/:value", async (req, res) => {
     })
 
     try {
-        const savedEntry = await newEntry.save();
-        res.status(200).json({
-            message: "Entry saved successully",
-            entry: savedEntry
-        })
+        const checkEntryLimit = await checkIfEntryLimitReached();
+        if (checkEntryLimit) {
+            const savedEntry = await newEntry.save();
+            res.status(200).json({
+                message: "Entry saved successully",
+                entry: savedEntry
+            })
+        }
+
     }
     catch (err) {
         res.status(500).json({
@@ -44,20 +54,22 @@ router.get("/find/:key", async (req, res) => {
             })
         }
         else {
-            const randomGeneratedString = generateRandom.generateRandomStringValue(5);
-            const createdNewEntry = await axios.post(`${BACKEND_URL}/createEntry/${req.params.key}/${randomGeneratedString}`);
-            res.status(200).json({
-                message: "Cache miss",
-                entry: {
-                    message: "Random data is generated and saved into database succesfully",
-                    data: {
-                        key: createdNewEntry.data.entry.key,
-                        value: createdNewEntry.data.entry.value
+            const checkEntryLimit = await checkIfEntryLimitReached();
+            if (checkEntryLimit) {
+                const randomGeneratedString = generateRandom.generateRandomStringValue(5);
+                const createdNewEntry = await axios.post(`${BACKEND_URL}/createEntry/${req.params.key}/${randomGeneratedString}`);
+                res.status(200).json({
+                    message: "Cache miss",
+                    entry: {
+                        message: "Random data is generated and saved into database succesfully",
+                        data: {
+                            key: createdNewEntry.data.entry.key,
+                            value: createdNewEntry.data.entry.value
+                        }
                     }
-                }
-            })
+                })
+            }
         }
-
     }
     catch (err) {
         res.status(500).json({
@@ -81,9 +93,9 @@ router.put("/updateEntry/:key", async (req, res) => {
                 message: updatedEntry
             })
         }
-        else{
+        else {
             res.status(200).json({
-                message : "Given key is not exist in database"
+                message: "Given key is not exist in database"
             })
         }
 
@@ -134,15 +146,20 @@ router.delete("/deleteEntry/:key", async (req, res) => {
     }
 })
 
+// Delete oldest record in database
+router.delete("/deleteOldest", async (req, res) => {
+
+})
+
 // Delete all entries
-router.delete("/deleteAll", async(req,res) => {
-    try{
-        await Entry.deleteMany() ;
+router.delete("/deleteAll", async (req, res) => {
+    try {
+        await Entry.deleteMany();
         res.status(200).json({
-            message : "All data successfully deleted"
+            message: "All data successfully deleted"
         })
     }
-    catch(err){
+    catch (err) {
         res.status(500).json({
             message: err
         })
